@@ -1,0 +1,22 @@
+# Core ML and Vector Processing
+sentence-transformers>=2.2.0
+pinecone-client>=3.0.0
+
+# Data Processing and Analysis
+pandas>=1.5.0
+numpy>=1.21.0
+
+# API and Web Requests
+requests>=2.28.0
+
+# JSON Processing (built-in, but explicitly listed for clarity)
+# json - built-in Python module
+
+# File and OS Operations (built-in modules)
+# os - built-in Python module  
+# time - built-in Python module
+
+# Optional: Additional utilities that might be useful
+scikit-learn>=1.1.0  # For additional ML utilities if needed
+matplotlib>=3.5.0    # For data visualization (if you want to add plotting)
+seaborn>=0.11.0      # For enhanced visualizations
