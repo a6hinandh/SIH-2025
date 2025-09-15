@@ -4,7 +4,7 @@ from sentence_transformers import SentenceTransformer
 from pinecone_setup import initialize_pinecone
 
 # 2. Connect to Gemini
-genai.configure(api_key="AIzaSyCVAWtQWFXUo9UiqnOCiQLWIOra4uDSkqg")
+genai.configure(api_key="YOUR_GOOGLE_GEMINI_API_KEY")
 llmmodel = genai.GenerativeModel("gemini-1.5-flash")
 
 # 3. Function to retrieve context from Pinecone
@@ -37,7 +37,7 @@ def generate_response(results, query):
     return response.text
 
 # 5. Example usage
-API_KEY = "pcsk_3Fx1Dr_T9VPQFX4py9BfoeZhDgEJJ74s5SuNQYVgtnQWufp9mwsDQWrAkSsoBWDHbd5wm7"
+API_KEY = "YOUR_PINECONE_API_KEY"
 index = initialize_pinecone(API_KEY)
 model = SentenceTransformer('all-mpnet-base-v2')
 
