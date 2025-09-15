@@ -9,7 +9,7 @@ def query_index(index, model, query_text, top_k=5):
     return result
 
 if __name__ == "__main__":
-    API_KEY = "YOUR_PINECONE_API_KEY"
+    API_KEY = "YOUR_API_KEY"
     index = initialize_pinecone(API_KEY)
     model = SentenceTransformer('all-mpnet-base-v2')
 

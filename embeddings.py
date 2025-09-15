@@ -55,7 +55,7 @@ def load_data(json_file):
         
         # Create text representation
         text = (
-            f"State: {location_name}. "
+            f"District: {location_name}. "
             f"Area: {total_area}. "
             f"Rainfall: {rainfall_total}. "
             f"Recharge: {recharge_total}. "
@@ -70,7 +70,7 @@ def load_data(json_file):
         if entry_id is None or entry_id == "":
             # Generate a safe ID using the location name
             safe_name = location_name.replace(" ", "_").replace("-", "_").lower()
-            entry_id = f"state_{safe_name}_{len(ids)}"
+            entry_id = f"district_{safe_name}_{len(ids)}"
         ids.append(str(entry_id))  # Ensure it's always a string
     
     return ids, texts
@@ -81,7 +81,7 @@ def create_embeddings(texts):
     return embeddings
 
 if __name__ == "__main__":
-    json_file = "output/india.json"
+    json_file = "states/KERALA.json"
     ids, texts = load_data(json_file)
     
     # Print first few texts to verify

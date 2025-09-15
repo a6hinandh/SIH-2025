@@ -46,4 +46,4 @@ def debug_json_structure(json_file):
         print(f"❌ Error: {e}")
 
 if __name__ == "__main__":
-    debug_json_structure("output/india.json")
+    debug_json_structure("states/KERALA.json")

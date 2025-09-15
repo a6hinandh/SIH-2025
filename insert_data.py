@@ -27,8 +27,8 @@ def insert_embeddings(index, ids, texts, embeddings):
     print(f"🎉 Successfully inserted {len(embeddings)} total entries into Pinecone.")
 
 if __name__ == "__main__":
-    API_KEY = ""
-    json_file = "output/india.json"
+    API_KEY = "API_KEY"
+    json_file = "states/KERALA.json"
     
     print("🚀 Starting data insertion pipeline...")
     
