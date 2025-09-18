@@ -3,31 +3,21 @@
 from embeddings import load_data, create_embeddings
 from pinecone_setup import initialize_pinecone
 
-def insert_embeddings(index, ids, texts, embeddings):
+def insert_embeddings(index, ids, texts,metadatas, embeddings):
     # Insert embeddings in batches for better performance
-    batch_size = 100
-    
-    for i in range(0, len(embeddings), batch_size):
-        batch_ids = ids[i:i + batch_size]
-        batch_texts = texts[i:i + batch_size]
-        batch_embeddings = embeddings[i:i + batch_size]
+    for i in range(len(embeddings)):
+        # Merge metadata with text
+        meta = metadatas[i].copy()
+        meta["text"] = texts[i]
         
-        # Prepare vectors for upsert
-        vectors = []
-        for j, vector in enumerate(batch_embeddings):
-            metadata = {
-                "text": batch_texts[j]
-            }
-            vectors.append((batch_ids[j], vector.tolist(), metadata))
-        
-        # Upsert the batch
-        index.upsert(vectors)
-        print(f"✅ Inserted batch {i//batch_size + 1}: {len(vectors)} entries")
+        vector = embeddings[i].tolist()
+        index.upsert([(ids[i], vector, meta)])
+        print(f"✅ Inserted {ids[i]}")
     
     print(f"🎉 Successfully inserted {len(embeddings)} total entries into Pinecone.")
 
 if __name__ == "__main__":
-    API_KEY = "API_KEY"
+    API_KEY = "pcsk_3Fx1Dr_T9VPQFX4py9BfoeZhDgEJJ74s5SuNQYVgtnQWufp9mwsDQWrAkSsoBWDHbd5wm7"
     json_file = "states/KERALA.json"
     
     print("🚀 Starting data insertion pipeline...")
@@ -37,7 +27,7 @@ if __name__ == "__main__":
     
     # Load and process data
     print("📂 Loading data...")
-    ids, texts = load_data(json_file)
+    ids, texts, metadatas = load_data(json_file)
     print(f"📊 Loaded {len(texts)} entries")
     
     # Create embeddings
@@ -46,4 +36,4 @@ if __name__ == "__main__":
     
     # Insert into Pinecone
     print("📤 Inserting into Pinecone...")
-    insert_embeddings(index, ids, texts, embeddings)
+    insert_embeddings(index, ids, texts,metadatas, embeddings)

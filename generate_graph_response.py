@@ -7,7 +7,7 @@ import os
 load_dotenv()
 
 # --- CONFIG ---
-genai.configure(api_key=os.getenv("GENAI_API_KEY"))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 NEO4J_URI = os.getenv("NEO4J_URI")
 NEO4J_USER = os.getenv("NEO4J_USER")
@@ -34,6 +34,7 @@ Nodes and their properties:
 (:State - name, uuid)
 (:StageOfExtraction - command, non_command, poor_quality, total)
 (:FutureUse - command, non_command, poor_quality, total)
+(:District - name, uuid)
 
 Relationships:
 "(State)-[:HAS_AREA]->(Area)"
@@ -49,13 +50,30 @@ Relationships:
 "(State)-[:HAS_FUTURE_USE]->(FutureUse)"
 "(State)-[:HAS_ADDITIONAL_RECHARGE]->(AdditionalRecharge)"
 "(State)-[:HAS_AQUIFER]->(Aquifer)"
+"(State)-[:HAS_District]->(District)"
+
+"(District)-[:HAS_AREA]->(Area)"
+"(District)-[:HAS_LOSS]->(Loss)"
+"(District)-[:HAS_BLOCK_SUMMARY]->(BlockSummary)"
+"(District)-[:HAS_RECHARGE]->(Recharge)"
+"(District)-[:HAS_DRAFT]->(Draft)"
+"(District)-[:HAS_ALLOCATION]->(Allocation)"
+"(District)-[:HAS_AVAILABILITY]->(Availability)"
+"(District)-[:HAS_STAGE]->(StageOfExtraction)"
+"(District)-[:HAS_RAINFALL]->(Rainfall)"
+"(District)-[:HAS_GROUND_WATER]->(GroundWaterAvailability)"
+"(District)-[:HAS_FUTURE_USE]->(FutureUse)"
+"(District)-[:HAS_ADDITIONAL_RECHARGE]->(AdditionalRecharge)"
+"(District)-[:HAS_AQUIFER]->(Aquifer)"
 
 Notes:
 - "India" is the only Country.
 - States like Kerala, Tamil Nadu, Gujarat are (:State), not (:Country).
-- Convert states to capital letters
+- Places like ernakulam, kottayam, thrissur, etc are districts of kerala.
+- Convert states and districts to capital letters
 - If asked for recharge_worthy or non_recharge_worthy_area, mention it in the type property of (:Area)
 - If asked for total area, remember the type is "total"
+- If have to use BlockSummary node, simply return the value of what is asked
 """
 
 # --- Step 1: Convert user query to Cypher using Gemini ---
@@ -69,6 +87,7 @@ def query_to_cypher(user_query):
     "{user_query}"
 
     Only return the Cypher query. No explanation.
+    For filtered counts, always place WHERE clause **before RETURN**.
     Remove ```cypher from the beginning and ``` from the end and return the response
     """
     model = genai.GenerativeModel("gemini-1.5-flash")
@@ -83,8 +102,7 @@ def run_cypher(cypher_query):
 
 # --- Chatbot Interface ---
 def chatbot(user_query):
-    cypher = query_to_cypher(user_query)
-    
+    cypher = query_to_cypher(user_query)    
 
     try:
         results = run_cypher(cypher)

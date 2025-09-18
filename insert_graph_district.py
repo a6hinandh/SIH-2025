@@ -11,28 +11,28 @@ def clean_dict(d):
 
 # --- Main insert function ---
 def insert_all(tx, data):
-    for state in data:
-        loc = state["locationName"]
-        uuid = state.get("locationUUID") or "total"
+    for District in data:
+        loc = District["locationName"]
+        uuid = District.get("locationUUID") or "total"
 
-        # Create (or update) State node with UUID
+        # Create (or update) District node with UUID
         tx.run("""
-            MERGE (s:State {uuid:$uuid})
+            MERGE (s:District {uuid:$uuid})
             SET s.name = $loc
         """, loc=loc, uuid=uuid)
 
         # Connect to Country
         tx.run("""
-            MERGE (c:Country {name:$country})
+            MERGE (c:State {name:$state})
             WITH c
-            MATCH (s:State {uuid:$uuid})
-            MERGE (c)-[:HAS_STATE]->(s)
-        """, country="India", uuid=uuid)
+            MATCH (s:District {uuid:$uuid})
+            MERGE (c)-[:HAS_District]->(s)
+        """, state="KERALA", uuid=uuid)
 
         # Areas
-        for area_type, v in state["area"].items():
+        for area_type, v in District["area"].items():
             tx.run("""
-                MATCH (l:State {uuid:$uuid})
+                MATCH (l:District {uuid:$uuid})
                 MERGE (a:Area {type:$type,uuid:$uuid})
                 SET a += $vals
                 MERGE (l)-[:HAS_AREA]->(a)
@@ -40,103 +40,103 @@ def insert_all(tx, data):
 
         # Loss
         tx.run("""
-            MATCH (l:State {uuid:$uuid})
-            MERGE (loss:Loss {State:$loc})
+            MATCH (l:District {uuid:$uuid})
+            MERGE (loss:Loss {District:$loc})
             SET loss += $loss
             MERGE (l)-[:HAS_LOSS]->(loss)
-        """, loc=loc, uuid=uuid, loss=clean_dict(state["loss"]))
+        """, loc=loc, uuid=uuid, loss=clean_dict(District["loss"]))
 
-        # Block Summary (make key unique per State)
-        for k, v in state["reportSummary"].items():
+        # Block Summary (make key unique per District)
+        for k, v in District["reportSummary"].items():
             if k != "total": 
                 continue
             block = clean_dict(v.get("BLOCK", {}))
             tx.run("""
-                MATCH (l:State {uuid:$uuid})
+                MATCH (l:District {uuid:$uuid})
                 MERGE (b:BlockSummary {uuid:$uuid+"_"+$bid})
                 SET b += $block
                 MERGE (l)-[:HAS_BLOCK_SUMMARY]->(b)
             """, bid=k, loc=loc, uuid=uuid, block=block)
 
         # Recharge Data
-        recharge = {k: v.get("total") for k, v in state["rechargeData"].items() if isinstance(v, dict)}
+        recharge = {k: v.get("total") for k, v in District["rechargeData"].items() if isinstance(v, dict)}
         tx.run("""
-            MATCH (l:State {uuid:$uuid})
-            MERGE (r:Recharge {State:$loc})
+            MATCH (l:District {uuid:$uuid})
+            MERGE (r:Recharge {District:$loc})
             SET r += $recharge
             MERGE (l)-[:HAS_RECHARGE]->(r)
         """, loc=loc, uuid=uuid, recharge=clean_dict(recharge))
 
         # Draft Data
-        draft = {k: v.get("total") for k, v in state["draftData"].items() if isinstance(v, dict)}
+        draft = {k: v.get("total") for k, v in District["draftData"].items() if isinstance(v, dict)}
         tx.run("""
-            MATCH (l:State {uuid:$uuid})
-            MERGE (d:Draft {State:$loc})
+            MATCH (l:District {uuid:$uuid})
+            MERGE (d:Draft {District:$loc})
             SET d += $draft
             MERGE (l)-[:HAS_DRAFT]->(d)
         """, loc=loc, uuid=uuid, draft=clean_dict(draft))
 
         # Allocation
-        alloc = {k: (v.get("total") if isinstance(v, dict) else v) for k, v in state["gwallocation"].items()}
+        alloc = {k: (v.get("total") if isinstance(v, dict) else v) for k, v in District["gwallocation"].items()}
         tx.run("""
-            MATCH (l:State {uuid:$uuid})
-            MERGE (a:Allocation {State:$loc})
+            MATCH (l:District {uuid:$uuid})
+            MERGE (a:Allocation {District:$loc})
             SET a += $alloc
             MERGE (l)-[:HAS_ALLOCATION]->(a)
         """, loc=loc, uuid=uuid, alloc=clean_dict(alloc))
 
         # Availability
         tx.run("""
-            MATCH (l:State {uuid:$uuid})
-            MERGE (av:Availability {State:$loc})
+            MATCH (l:District {uuid:$uuid})
+            MERGE (av:Availability {District:$loc})
             SET av += $availability
             MERGE (l)-[:HAS_AVAILABILITY]->(av)
-        """, loc=loc, uuid=uuid, availability=clean_dict(state["totalGWAvailability"]))
+        """, loc=loc, uuid=uuid, availability=clean_dict(District["totalGWAvailability"]))
 
         # Stage of Extraction
         tx.run("""
-            MATCH (l:State {uuid:$uuid})
-            MERGE (s:StageOfExtraction {State:$loc})
+            MATCH (l:District {uuid:$uuid})
+            MERGE (s:StageOfExtraction {District:$loc})
             SET s += $stage
             MERGE (l)-[:HAS_STAGE]->(s)
-        """, loc=loc, uuid=uuid, stage=clean_dict(state["stageOfExtraction"]))
+        """, loc=loc, uuid=uuid, stage=clean_dict(District["stageOfExtraction"]))
 
         # Rainfall
         tx.run("""
-            MATCH (l:State {uuid:$uuid})
-            MERGE (rf:Rainfall {State:$loc})
+            MATCH (l:District {uuid:$uuid})
+            MERGE (rf:Rainfall {District:$loc})
             SET rf += $rainfall
             MERGE (l)-[:HAS_RAINFALL]->(rf)
-        """, loc=loc, uuid=uuid, rainfall=clean_dict(state["rainfall"]))
+        """, loc=loc, uuid=uuid, rainfall=clean_dict(District["rainfall"]))
 
         #Ground Water Availability
         tx.run("""
-            MATCH (l:State {uuid:$uuid})
-            MERGE (gw:GroundWaterAvailability {State:$loc})
+            MATCH (l:District {uuid:$uuid})
+            MERGE (gw:GroundWaterAvailability {District:$loc})
             SET gw += $groundwater
             MERGE (l)-[:HAS_GROUND_WATER]->(gw)
-        """, loc=loc, uuid=uuid, groundwater=clean_dict(state["totalGWAvailability"]))
+        """, loc=loc, uuid=uuid, groundwater=clean_dict(District["totalGWAvailability"]))
 
         #Future Use
         tx.run("""
-            MATCH (l:State {uuid:$uuid})
-            MERGE (f:FutureUse {State:$loc})
+            MATCH (l:District {uuid:$uuid})
+            MERGE (f:FutureUse {District:$loc})
             SET f += $future
             MERGE (l)-[:HAS_FUTURE_USE]->(f)
-        """, loc=loc, uuid=uuid, future=clean_dict(state["availabilityForFutureUse"]))
+        """, loc=loc, uuid=uuid, future=clean_dict(District["availabilityForFutureUse"]))
         
 
         # Additional Recharge
-        add_recharge = {k: v.get("total") for k, v in state["additionalRecharge"].items() if isinstance(v, dict)}
+        add_recharge = {k: v.get("total") for k, v in District["additionalRecharge"].items() if isinstance(v, dict)}
         tx.run("""
-            MATCH (l:State {uuid:$uuid})
-            MERGE (ar:AdditionalRecharge {State:$loc})
+            MATCH (l:District {uuid:$uuid})
+            MERGE (ar:AdditionalRecharge {District:$loc})
             SET ar += $ar
             MERGE (l)-[:HAS_ADDITIONAL_RECHARGE]->(ar)
         """, loc=loc, uuid=uuid, ar=clean_dict(add_recharge))
 
         # Aquifer Business Data (loop all aquifers dynamically)
-        for aq_type, aq_vals in state["aquiferBusinessData"].items():
+        for aq_type, aq_vals in District["aquiferBusinessData"].items():
             if aq_vals and isinstance(aq_vals, dict):
                 aq_props = {}
                 for k, v in aq_vals.items():
@@ -145,8 +145,8 @@ def insert_all(tx, data):
                     else:
                         aq_props[k] = v
                 tx.run("""
-                    MATCH (l:State {uuid:$uuid})
-                    MERGE (aq:Aquifer {type:$type, State:$loc})
+                    MATCH (l:District {uuid:$uuid})
+                    MERGE (aq:Aquifer {type:$type, District:$loc})
                     SET aq += $aq
                     MERGE (l)-[:HAS_AQUIFER]->(aq)
                 """, type=aq_type, loc=loc, uuid=uuid, aq=clean_dict(aq_props))
@@ -154,7 +154,7 @@ def insert_all(tx, data):
 
 # --- Run the insert ---
 if __name__ == "__main__":
-    with open("states/kerala.json", "r") as f:
+    with open("states/KERALA.json", "r") as f:
         data = json.load(f)
 
     driver = GraphDatabase.driver(

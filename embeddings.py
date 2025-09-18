@@ -9,7 +9,7 @@ def load_data(json_file):
     
     texts = []
     ids = []
-    metadata = {}
+    metadatas=[]
     
     for entry in data:
         # Since there's no loctype field, we'll process all entries as states
@@ -44,10 +44,10 @@ def load_data(json_file):
         if isinstance(loss_data, dict):
             total_loss = loss_data.get("total")
 
-        future_use = None 
-        future_use_data = entry.get("gwProjectedUtilAllocationDynamicAquifer",{})
-        if isinstance(future_use_data, dict):
-            future_use = future_use_data["total"].get("total")
+        # future_use = None 
+        # future_use_data = entry.get("gwProjectedUtilAllocationDynamicAquifer",{})
+        # if isinstance(future_use_data, dict):
+        #     future_use = future_use_data["total"].get("total")
 
         avaialable_groundwater = None 
         avaialable_groundwater_command = None
@@ -75,14 +75,14 @@ def load_data(json_file):
         
         if isinstance(recharge_data, dict) and 'total' in recharge_data:
             if isinstance(recharge_data['total'], dict):
-                recharge_total = recharge_data['total']
-                rainfall_recharge_total = recharge_data["rainfall"]
-                streamChannel_recharge_total = recharge_data["agriculture"]
-                canal_recharge_total = recharge_data["canal"]
-                surfaceWater_recharge_total=recharge_data["surface_irrigation"]
-                groundWater_recharge_total=recharge_data["gw_irrigation"]
-                waterConversationStructures_recharge_total=recharge_data["artificial_structure"]
-                tanksAndPonds_recharge_total=recharge_data["water_body"]
+                recharge_total = recharge_data.get('total',"")
+                rainfall_recharge_total = recharge_data.get("rainfall","")
+                streamChannel_recharge_total = recharge_data.get("agriculture","")
+                canal_recharge_total = recharge_data.get("canal","")
+                surfaceWater_recharge_total=recharge_data.get("surface_irrigation","")
+                groundWater_recharge_total=recharge_data.get("gw_irrigation","")
+                waterConversationStructures_recharge_total=recharge_data.get("artificial_structure","")
+                tanksAndPonds_recharge_total=recharge_data.get("water_body","")
             else:
                 recharge_total = recharge_data.get('total')
         
@@ -109,10 +109,16 @@ def load_data(json_file):
         
         category = entry.get('category', 'Unknown')
 
+
         metadata = {
             "State": location_name,
             "Total area" : total_area,
             "Rainfall" : rainfall_total,
+            "Total ground water available" : avaialable_groundwater,
+            "Total extractable ground water" : draft_total,
+            "Available Groundwater for future use" : future_total,
+            "Stage of ground water extraction" : stage_total
+
         }
         
         # Create text representation
@@ -144,15 +150,11 @@ def load_data(json_file):
         Ground water extraction data : {draft_data}
         Available Groundwater for future use : {future_total}
         Stage of ground water extraction : {stage_total}
-       
-
-
-        Draft: {draft_total}
-        Stage of extraction: {stage_total}
         Category: {category}
         """
         
         texts.append(text)
+        metadatas.append(metadata)
         # Use locationUUID as ID, or fallback to a generated ID
         entry_id = entry.get('locationUUID')
         if entry_id is None or entry_id == "":
@@ -161,7 +163,8 @@ def load_data(json_file):
             entry_id = f"district_{safe_name}_{len(ids)}"
         ids.append(str(entry_id))  # Ensure it's always a string
     
-    return ids, texts, metadata
+    
+    return ids, texts, metadatas
 
 def create_embeddings(texts):
     model = SentenceTransformer('all-mpnet-base-v2')
@@ -169,8 +172,8 @@ def create_embeddings(texts):
     return embeddings
 
 if __name__ == "__main__":
-    json_file = "states/KERALA.json"
-    ids, texts = load_data(json_file)
+    json_file = "output/india.json"
+    ids, texts, metadatas = load_data(json_file)
     
     # Print first few texts to verify
     print(f"📝 Sample processed texts:")
