@@ -9,6 +9,7 @@ def load_data(json_file):
     
     texts = []
     ids = []
+    metadata = {}
     
     for entry in data:
         # Since there's no loctype field, we'll process all entries as states
@@ -19,11 +20,43 @@ def load_data(json_file):
         # Extract nested data safely
         area_data = entry.get('area', {})
         total_area = None
+        recharge_area = None
+        recharge_command_area = None
+        recharge_non_command_area = None
+        hilly_area = None
+        non_recharge_area = None
         if isinstance(area_data, dict) and 'total' in area_data:
             if isinstance(area_data['total'], dict):
                 total_area = area_data['total'].get('totalArea')
+                hilly_area = area_data['total'].get('hillyArea')
+                
             else:
                 total_area = area_data.get('total')
+            if isinstance(area_data['recharge_worthy'],dict):
+                recharge_area = area_data['recharge_worthy'].get('totalArea')
+                recharge_command_area = area_data['recharge_worthy'].get('commandArea')
+                recharge_non_command_area = area_data['recharge_worthy'].get('nonCommandArea')
+            if isinstance(area_data['non_recharge_worthy'],dict):
+                non_recharge_area = area_data['non_recharge_worthy'].get('totalArea')
+
+        total_loss = None
+        loss_data = entry.get("loss",{})
+        if isinstance(loss_data, dict):
+            total_loss = loss_data.get("total")
+
+        future_use = None 
+        future_use_data = entry.get("gwProjectedUtilAllocationDynamicAquifer",{})
+        if isinstance(future_use_data, dict):
+            future_use = future_use_data["total"].get("total")
+
+        avaialable_groundwater = None 
+        avaialable_groundwater_command = None
+        avaialable_groundwater_non_command = None
+        groundwater_data = entry.get("totalGWAvailability",{})
+        if isinstance(groundwater_data, dict):
+            avaialable_groundwater = groundwater_data.get("total")
+            avaialable_groundwater_command = groundwater_data.get("non_command")
+            avaialable_groundwater_non_command = groundwater_data.get("command")
         
         rainfall_data = entry.get('rainfall', {})
         rainfall_total = None
@@ -32,9 +65,24 @@ def load_data(json_file):
         
         recharge_data = entry.get('rechargeData', {})
         recharge_total = None
+        rainfall_recharge_total = None
+        streamChannel_recharge_total = None
+        canal_recharge_total = None
+        surfaceWater_recharge_total = None
+        groundWater_recharge_total = None
+        waterConversationStructures_recharge_total = None
+        tanksAndPonds_recharge_total = None
+        
         if isinstance(recharge_data, dict) and 'total' in recharge_data:
             if isinstance(recharge_data['total'], dict):
-                recharge_total = recharge_data['total'].get('total')
+                recharge_total = recharge_data['total']
+                rainfall_recharge_total = recharge_data["rainfall"]
+                streamChannel_recharge_total = recharge_data["agriculture"]
+                canal_recharge_total = recharge_data["canal"]
+                surfaceWater_recharge_total=recharge_data["surface_irrigation"]
+                groundWater_recharge_total=recharge_data["gw_irrigation"]
+                waterConversationStructures_recharge_total=recharge_data["artificial_structure"]
+                tanksAndPonds_recharge_total=recharge_data["water_body"]
             else:
                 recharge_total = recharge_data.get('total')
         
@@ -45,6 +93,14 @@ def load_data(json_file):
                 draft_total = draft_data['total'].get('total')
             else:
                 draft_total = draft_data.get('total')
+
+        future_data = entry.get('availabilityForFutureUse', {})
+        future_total = None
+        if isinstance(future_data, dict) and 'total' in draft_data:
+            if isinstance(future_data['total'], dict):
+                future_total = future_data['total'].get('total')
+            else:
+                future_total = future_data.get('total')
         
         stage_extraction = entry.get('stageOfExtraction', {})
         stage_total = None
@@ -52,17 +108,49 @@ def load_data(json_file):
             stage_total = stage_extraction.get('total')
         
         category = entry.get('category', 'Unknown')
+
+        metadata = {
+            "State": location_name,
+            "Total area" : total_area,
+            "Rainfall" : rainfall_total,
+        }
         
         # Create text representation
-        text = (
-            f"District: {location_name}. "
-            f"Area: {total_area}. "
-            f"Rainfall: {rainfall_total}. "
-            f"Recharge: {recharge_total}. "
-            f"Draft: {draft_total}. "
-            f"Stage of extraction: {stage_total}. "
-            f"Category: {category}."
-        )
+        text = f"""
+        Ground water report for {location_name}:
+        Total area: {total_area}
+        Rainfall: {rainfall_total}
+        Total Recharge worthy area: {recharge_area}
+        Total Recharge worthy command area: {recharge_command_area}
+        Total Recharge worthy non command area: {recharge_non_command_area}
+        Total Non recharge worthy area: {non_recharge_area}
+        Total Hilly area : {hilly_area}
+        Total loss in ground water : {total_loss}
+        Total available ground water : {avaialable_groundwater}
+        Total available ground water in command area : {avaialable_groundwater_command}
+        Total available ground water in non command area : {avaialable_groundwater_non_command}
+        Ground water recharge data : {
+            f"""Total : {recharge_total},
+            "Rainfall" : {rainfall_recharge_total},
+            "Stream channel" : {streamChannel_recharge_total},
+            "Canal" : {canal_recharge_total},
+            "Surface water irrigation": {surfaceWater_recharge_total},
+            "Ground water irrigation" : {groundWater_recharge_total},
+            "Water Conversation Structures": {waterConversationStructures_recharge_total},
+            "Tanks and Ponds" : {tanksAndPonds_recharge_total},
+            """
+        }
+        Total extractable ground water : {draft_total} 
+        Ground water extraction data : {draft_data}
+        Available Groundwater for future use : {future_total}
+        Stage of ground water extraction : {stage_total}
+       
+
+
+        Draft: {draft_total}
+        Stage of extraction: {stage_total}
+        Category: {category}
+        """
         
         texts.append(text)
         # Use locationUUID as ID, or fallback to a generated ID
@@ -73,7 +161,7 @@ def load_data(json_file):
             entry_id = f"district_{safe_name}_{len(ids)}"
         ids.append(str(entry_id))  # Ensure it's always a string
     
-    return ids, texts
+    return ids, texts, metadata
 
 def create_embeddings(texts):
     model = SentenceTransformer('all-mpnet-base-v2')
