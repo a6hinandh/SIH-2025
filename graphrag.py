@@ -1,6 +1,6 @@
 """
 graphrag.py -- GraphRAG example: Pinecone (semantic) + Neo4j (graph) + Gemini (LLM)
-Updated for Pinecone v4.x API.
+Updated with consistent fetching and coding methods similar to generate_graph_response.py
 """
 
 import os
@@ -34,7 +34,7 @@ if not PINECONE_API_KEY:
     raise SystemExit("Pinecone credentials required in .env")
 
 # ---------- Initialize clients ----------
-# 1) Neo4j
+# 1) Neo4j - Using same pattern as generate_graph_response.py
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASS))
 
 # 2) Pinecone v4
@@ -46,150 +46,215 @@ pine_index = pc.Index(PINECONE_INDEX)
 # 3) Embedding model
 embed_model = SentenceTransformer(EMBED_MODEL_NAME)
 
-# 4) Gemini (google.generativeai)
+# 4) Configure Gemini (same as generate_graph_response.py)
 genai.configure(api_key=GENAI_API_KEY)
-llm = genai.GenerativeModel("gemini-1.5-flash")
 
-# ---------- Helpers ----------
-def embed_text(texts):
-    """Return list of vectors corresponding to texts"""
-    vecs = embed_model.encode(texts, show_progress_bar=False)
-    return [v.tolist() for v in vecs]
+# ---------- Knowledge Graph Schema (Enhanced from generate_graph_response.py) ----------
+SCHEMA = """
+We have a Neo4j knowledge graph with these entities:
 
-def semantic_retrieve(query_text, top_k=5):
-    """Query Pinecone, return list of dicts {id, score, metadata}"""
-    qvec = embed_text([query_text])[0]
-    resp = pine_index.query(vector=qvec, top_k=top_k, include_metadata=True)
-    results = []
-    for m in resp.matches:   # v4: matches is an attribute, not dict
-        results.append({
-            "id": m.id,
-            "score": m.score,
-            "metadata": dict(m.metadata) if m.metadata else {},
-        })
-    return results
-
-def query_to_cypher(user_query, schema_text):
-    """
-    Ask Gemini to produce a Cypher query when the question is structural/time-series.
-    Returns Cypher string or None.
-    """
-    prompt = f"""
-You are an assistant that converts groundwater-related natural language questions into Cypher queries.
-Schema:
-{schema_text}
-
-Instructions:
-- If the user question requires structured traversal or exact comparisons (e.g. "Which districts moved from Safe to Semi-Critical in the last 5 years?"),
-  produce a single Cypher query only (no explanation).
-- If the question is purely open-ended or requires long-form narrative (e.g. "explain groundwater trends"), respond with the single token: NO_CYPHER.
-- Use the node/relationship naming style from the schema. Include YEAR filters when relevant.
-Return ONLY the Cypher query or the token NO_CYPHER.
-User question: \"{user_query}\"
-"""
-    try:
-        res = llm.generate_content(prompt)
-        text = res.text.strip()
-        if text.upper().startswith("NO_CYPHER"):
-            return None
-        if any(k in text.upper() for k in ["MATCH ", "RETURN ", "WHERE ", "CREATE ", "WITH "]):
-            text = text.replace("```cypher", "").replace("```", "").strip()
-            return text
-        return None
-    except Exception as e:
-        print("Error calling LLM for cypher conversion:", e)
-        return None
-
-def run_cypher(cypher_query):
-    """Run query against Neo4j and return list of dicts"""
-    if not cypher_query:
-        return []
-    try:
-        with driver.session() as session:
-            result = session.run(cypher_query)
-            rows = [record.data() for record in result]
-            return rows
-    except Exception as e:
-        return {"__error__": str(e), "__trace__": traceback.format_exc()}
-
-def llm_fuse_and_answer(query, semantic_hits, graph_hits):
-    """
-    Merge semantic retrieval hits and graph results into a final answer.
-    """
-    prompt = f"""
-You are an expert groundwater assistant that must merge semantic retrieval results and knowledge-graph query outputs into a clear, factual answer.
-
-User question:
-{query}
-
-Semantic retrieval (top hits): {json.dumps(semantic_hits, indent=2)}
-
-Graph query results: {json.dumps(graph_hits, indent=2)}
-
-Rules:
-- Use only the information provided above. Do not hallucinate.
-- If graph results contain an "__error__" field, explain that the graph query failed and return the semantic-only summary.
-- When possible, show the graph path or district names returned.
-- Keep answer concise (max ~6 sentences) and technical.
-- If no results were found, say "No results found" politely.
-
-Provide the answer now:
-"""
-    r = llm.generate_content(prompt)
-    return r.text
-
-# ---------- Knowledge Graph Schema summary ----------
-SCHEMA_SUMMARY = """
 Nodes:
-(:State {name, uuid})
-(:District {name, uuid})
-(:Block {name, uuid})
-(:Category {name}) -- categories: Safe, Semi-Critical, Critical, Over-Exploited
-Relationships with properties:
-- (d:District)-[:HAS_CATEGORY {year:int}]->(c:Category)
-- (d:District)-[:HAS_RAINFALL {year:int, value:float}]->(:Rainfall)
-- (State)-[:HAS_DISTRICT]->(District)
-- (District)-[:HAS_BLOCK]->(Block)
+(:Availability - command, non_command, poor_quality, total)
+(:GroundWaterAvailability - command, non_command, poor_quality, total)
+(:Aquifer - dynamic_gw, in_storage_gw, total, type)
+(:Loss - command, non_command, poor_quality, total, et, evaporation, transpiration)
+(:Rainfall - command, non_command, poor_quality, total)
+(:AdditionalRecharge - floodProneArea, shallowArea, springDischarge, total)
+(:Recharge - agriculture, artificial_structure, canal, gw_irrigation, pipeline, rainfall, sewage, streamRecharge, surface_irrigation, total, water_body)
+(:BlockSummary - Hilly Area, critical, over_exploited, safe, semi_critical, salinity)
+(:Area - type(non_recharge_worthy, recharge_worthy, total), commandArea, forestArea, hillyArea, nonCommandArea, pavedArea, poorQualityArea, totalArea, unpavedArea, uuid)
+(:Draft - agriculture, domestic, industry, total)
+(:Allocation - domestic, industry, total)
+(:State - name, uuid)
+(:StageOfExtraction - command, non_command, poor_quality, total)
+(:FutureUse - command, non_command, poor_quality, total)
+(:District - name, uuid)
+(:Category - name) -- categories: Safe, Semi-Critical, Critical, Over-Exploited
+
+Relationships:
+(State)-[:HAS_RAINFALL]->(Rainfall)
+(State)-[:HAS_RECHARGE]->(Recharge)
+(State)-[:HAS_DRAFT]->(Draft)
+(State)-[:HAS_ALLOCATION]->(Allocation)
+(State)-[:HAS_AVAILABILITY]->(Availability)
+(State)-[:HAS_STAGE]->(StageOfExtraction)
+(State)-[:HAS_GROUND_WATER]->(GroundWaterAvailability)
+(State)-[:HAS_FUTURE_USE]->(FutureUse)
+(State)-[:HAS_ADDITIONAL_RECHARGE]->(AdditionalRecharge)
+(State)-[:HAS_AQUIFER]->(Aquifer)
+(State)-[:HAS_District]->(District)
+(District)-[:HAS_RAINFALL]->(Rainfall)
+(District)-[:HAS_RECHARGE]->(Recharge)
+(District)-[:HAS_DRAFT]->(Draft)
+(District)-[:HAS_ALLOCATION]->(Allocation)
+(District)-[:HAS_AVAILABILITY]->(Availability)
+(District)-[:HAS_STAGE]->(StageOfExtraction)
+(District)-[:HAS_GROUND_WATER]->(GroundWaterAvailability)
+(District)-[:HAS_FUTURE_USE]->(FutureUse)
+(District)-[:HAS_ADDITIONAL_RECHARGE]->(AdditionalRecharge)
+(District)-[:HAS_AQUIFER]->(Aquifer)
+(District)-[:HAS_CATEGORY {year:int}]->(Category)
+
+Notes:
+- "India" is the only Country.
+- States like Kerala, Tamil Nadu, Gujarat are (:State).
+- Places like Ernakulam, Kottayam, Thrissur are (:District) of Kerala.
+- Convert states and districts to CAPITAL LETTERS when querying.
 """
 
-# ---------- Main GraphRAG pipeline ----------
-def graphrag_query(user_query):
-    semantic_hits = semantic_retrieve(user_query, top_k=5)
-    cypher = query_to_cypher(user_query, SCHEMA_SUMMARY)
-    if cypher:
-        graph_results = run_cypher(cypher)
+# ---------- Step 1: Convert natural language → Cypher (Same method as generate_graph_response.py) ----------
+def query_to_cypher(user_query):
+    """
+    Convert natural language to Cypher query using the same method as generate_graph_response.py
+    """
+    prompt = f"""
+    You are an assistant that converts natural language into Cypher queries.
+    Schema:
+    {SCHEMA}
+
+    Convert this question into a Cypher query:
+    "{user_query}"
+
+    Only return the Cypher query (no explanation).
+    """
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    response = model.generate_content(prompt)
+    return response.text.strip()
+
+# ---------- Step 2: Run Cypher on Neo4j (Same method as generate_graph_response.py) ----------
+def run_cypher(cypher_query):
+    """
+    Execute Cypher query against Neo4j - same method as generate_graph_response.py
+    """
+    with driver.session() as session:
+        result = session.run(cypher_query)
+        return [record.data() for record in result]
+
+# ---------- Step 3: Semantic Retrieval from Pinecone ----------
+def query_pinecone_index(query_text, top_k=5):
+    """
+    Query Pinecone for semantic similarity - following generate_response.py pattern
+    """
+    query_vector = embed_model.encode([query_text])[0].tolist()
+    result = pine_index.query(vector=query_vector, top_k=top_k, include_metadata=True)
+    
+    # Format results similar to generate_response.py
+    formatted_results = []
+    for match in result.matches:
+        formatted_results.append({
+            "id": match.id,
+            "score": match.score,
+            "metadata": dict(match.metadata) if match.metadata else {},
+        })
+    return formatted_results
+
+# ---------- Step 4: Generate Response (Enhanced from generate_graph_response.py pattern) ----------
+def generate_graphrag_response(semantic_results, graph_results, query):
+    """
+    Generate final response using both semantic and graph results
+    Similar to generate_response pattern but enhanced for GraphRAG
+    """
+    prompt = f"""
+    You are an expert in groundwater assessment and management. Your role is to provide accurate, data-driven responses based on both semantic search results and knowledge graph data.
+
+    Rules:
+    - Provide answers that are clear, concise, and factual.
+    - Always include units, figures, and values exactly as they appear in the context.
+    - Combine insights from both semantic search and graph traversal results.
+    - If graph results contain errors, focus on semantic results but mention the limitation.
+    - Structure responses logically for readability.
+
+    Style:
+    - Use a professional and technical tone.
+    - Avoid speculation or assumptions.
+    - Prioritize data-driven insights.
+
+    Semantic Search Results:
+    {json.dumps(semantic_results, indent=2)}
+
+    Knowledge Graph Results:
+    {json.dumps(graph_results, indent=2)}
+
+    Query: {query}
+    Answer:
+    """
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    response = model.generate_content(prompt)
+    return response.text
+
+# ---------- Main GraphRAG Function (Following generate_graph_response.py chatbot pattern) ----------
+def graphrag_chatbot(user_query):
+    """
+    Main GraphRAG function that combines semantic and graph retrieval
+    Following the chatbot pattern from generate_graph_response.py
+    """
+    # Step 1: Handle direct Cypher input for debugging (same as generate_graph_response.py)
+    if user_query.lower().startswith("cypher:"):
+        cypher = user_query[len("cypher:"):].strip()
+        semantic_results = []
     else:
+        # Step 2: Get semantic results from Pinecone
+        semantic_results = query_pinecone_index(user_query, top_k=5)
+        
+        # Step 3: Convert to Cypher for graph traversal
+        cypher = query_to_cypher(user_query)
+
+    # Step 4: Execute graph query
+    try:
+        graph_results = run_cypher(cypher) if cypher else []
+        error_info = None
+    except Exception as e:
         graph_results = []
-    final_answer = llm_fuse_and_answer(user_query, semantic_hits, graph_results)
+        error_info = f"⚠️ Error running graph query:\nCypher: {cypher}\nError: {e}"
+
+    # Step 5: Generate combined response
+    if error_info:
+        # If graph query failed, use semantic results only
+        if semantic_results:
+            final_response = generate_graphrag_response(semantic_results, [], user_query)
+            final_response += f"\n\nNote: Graph query encountered an issue: {str(error_info).split('Error: ')[-1]}"
+        else:
+            final_response = error_info
+    elif not semantic_results and not graph_results:
+        final_response = "No results found from either semantic search or knowledge graph."
+    else:
+        final_response = generate_graphrag_response(semantic_results, graph_results, user_query)
+
     return {
         "query": user_query,
-        "cypher_attempted": bool(cypher),
-        "cypher": cypher,
-        "semantic_hits": semantic_hits,
+        "cypher_used": cypher,
+        "semantic_results": semantic_results,
         "graph_results": graph_results,
-        "final_answer": final_answer
+        "final_answer": final_response,
+        "error": error_info
     }
 
-# ---------- CLI ----------
+# ---------- CLI Interface (Same pattern as generate_graph_response.py) ----------
 if __name__ == "__main__":
-    print("GraphRAG CLI. Type a question and press enter. Type exit to quit.")
+    print("🚀 GraphRAG Chatbot started (Pinecone + Neo4j + Gemini)")
+    print("Type natural language queries OR `cypher: <query>` for direct queries")
+    print("Type 'exit' to quit\n")
+
     try:
         while True:
-            q = input("Ask: ").strip()
-            if not q:
-                continue
-            if q.lower() in ("exit", "quit"):
+            q = input("Ask: ")
+            if q.lower() in ["exit", "quit"]:
                 break
-            out = graphrag_query(q)
-            print("\n=== FINAL ANSWER ===\n")
-            print(out["final_answer"])
-            print("\n=== DEBUG (cypher & hits) ===")
-            print("Cypher attempted:", out["cypher_attempted"])
-            if out["cypher"]:
-                print("Cypher:", out["cypher"])
-            print("Semantic hits:", json.dumps(out["semantic_hits"], indent=2))
-            print("Graph results:", json.dumps(out["graph_results"], indent=2))
-            print("\n")
+
+            result = graphrag_chatbot(q)
+            
+            print(f"🔍 Cypher used: {result['cypher_used']}")
+            print(f"📊 Semantic hits: {len(result['semantic_results'])}")
+            print(f"🔗 Graph results: {len(result['graph_results'])}")
+            
+            if result['error']:
+                print(f"⚠️ {result['error']}")
+            
+            print("💡 Answer:", result['final_answer'])
+            print("-" * 80)
+
+    except KeyboardInterrupt:
+        print("\nExiting...")
     finally:
         try:
             driver.close()
