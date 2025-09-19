@@ -116,6 +116,7 @@ def query_to_cypher(user_query):
     "{user_query}"
 
     Only return the Cypher query (no explanation).
+    Remove ```cypher from beginnng and ``` from end
     """
     model = genai.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(prompt)
