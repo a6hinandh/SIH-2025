@@ -7,7 +7,7 @@ import os
 load_dotenv()
 
 # --- CONFIG ---
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key=os.getenv("GENAI_API_KEY"))
 
 NEO4J_URI = os.getenv("NEO4J_URI")
 NEO4J_USER = os.getenv("NEO4J_USER")
