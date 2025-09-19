@@ -1,6 +1,14 @@
 from neo4j import GraphDatabase
 import json
 
+from dotenv import load_dotenv
+import os
+
+# -----------------------------
+# Load environment variables
+# -----------------------------
+load_dotenv()
+
 # --- Utility to clean None values ---
 # --- Utility to clean None values safely ---
 def clean_dict(d):
@@ -154,12 +162,12 @@ def insert_all(tx, data):
 
 # --- Run the insert ---
 if __name__ == "__main__":
-    with open("states/kerala.json", "r") as f:
+    with open("output/india.json", "r") as f:
         data = json.load(f)
 
     driver = GraphDatabase.driver(
-        "neo4j+s://03882640.databases.neo4j.io", 
-        auth=("03882640", "jacLTqC7FH6l_qgbf6gQJp7wfXBq3b39EqV6KMPhiT4")
+        os.getenv("NEO4J_URI"), 
+        auth=(os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASS"))
     )
 
     with driver.session() as session:
