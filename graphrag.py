@@ -351,13 +351,14 @@ SCHEMA = """
 We have a Neo4j knowledge graph with these entities:
 
 Nodes:
+Nodes and their properties:
 (:Availability - command, non_command, poor_quality, total)
 (:GroundWaterAvailability - command, non_command, poor_quality, total)
 (:Aquifer - dynamic_gw, in_storage_gw, total, type)
 (:Loss - command, non_command, poor_quality, total, et, evaporation, transpiration)
 (:Rainfall - command, non_command, poor_quality, total)
 (:AdditionalRecharge - floodProneArea, shallowArea, springDischarge, total)
-(:Recharge - agriculture, artificial_structure, canal, gw_irrigation, pipeline, rainfall, sewage, streamRecharge, surface_irrigation, total, water_body)
+(:Recharge - agriculture, artificial_structure, canal, gw_irrigation, pipeline, rainfall,sewage, streamRecharge, surface_irrigation, total, water_body)
 (:BlockSummary - Hilly Area, critical, over_exploited, safe, semi_critical, salinity)
 (:Area - type(non_recharge_worthy, recharge_worthy, total), commandArea, forestArea, hillyArea, nonCommandArea, pavedArea, poorQualityArea, totalArea, unpavedArea, uuid)
 (:Draft - agriculture, domestic, industry, total)
@@ -365,45 +366,49 @@ Nodes:
 (:State - name, uuid)
 (:StageOfExtraction - command, non_command, poor_quality, total)
 (:FutureUse - command, non_command, poor_quality, total)
-(:District - name, uuid)
-(:Category - name) -- categories: Safe, Semi-Critical, Critical, Over-Exploited
+(:District - name, uuid, status(safe,critical,exploited,etc), category(safe,critical,exploited,etc))
+(:Year - year, uuid)
+(:Country - name, uuid)
 
 Relationships:
-(State)-[:HAS_RAINFALL]->(Rainfall)
-(State)-[:HAS_RECHARGE]->(Recharge)
-(State)-[:HAS_DRAFT]->(Draft)
-(State)-[:HAS_ALLOCATION]->(Allocation)
-(State)-[:HAS_AVAILABILITY]->(Availability)
-(State)-[:HAS_STAGE]->(StageOfExtraction)
-(State)-[:HAS_GROUND_WATER]->(GroundWaterAvailability)
-(State)-[:HAS_FUTURE_USE]->(FutureUse)
-(State)-[:HAS_ADDITIONAL_RECHARGE]->(AdditionalRecharge)
-(State)-[:HAS_AQUIFER]->(Aquifer)
-(State)-[:HAS_District]->(District)
-(District)-[:HAS_RAINFALL]->(Rainfall)
-(District)-[:HAS_RECHARGE]->(Recharge)
-(District)-[:HAS_DRAFT]->(Draft)
-(District)-[:HAS_ALLOCATION]->(Allocation)
-(District)-[:HAS_AVAILABILITY]->(Availability)
-(District)-[:HAS_STAGE]->(StageOfExtraction)
-(District)-[:HAS_GROUND_WATER]->(GroundWaterAvailability)
-(District)-[:HAS_FUTURE_USE]->(FutureUse)
-(District)-[:HAS_ADDITIONAL_RECHARGE]->(AdditionalRecharge)
-(District)-[:HAS_AQUIFER]->(Aquifer)
-(District)-[:HAS_CATEGORY {year:int}]->(Category)
+"(Country)-[:HAS_YEAR]->(Year)"
+"(Country)-[:HAS_STATE]->(State)"
+"(State)-[:HAS_YEAR]->(Year)"
+"(State)-[:HAS_DISTRICT]->(District)"
+"(District)-[:HAS_YEAR]->(Year)"
+"(Year)-[:HAS_AREA]->(Area)"
+"(Year)-[:HAS_LOSS]->(Loss)"
+"(Year)-[:HAS_BLOCK_SUMMARY]->(BlockSummary)"
+"(Year)-[:HAS_RECHARGE]->(Recharge)"
+"(Year)-[:HAS_DRAFT]->(Draft)"
+"(Year)-[:HAS_ALLOCATION]->(Allocation)"
+"(Year)-[:HAS_AVAILABILITY]->(Availability)"
+"(Year)-[:HAS_STAGE]->(StageOfExtraction)"
+"(Year)-[:HAS_RAINFALL]->(Rainfall)"
+"(Year)-[:HAS_GROUND_WATER]->(GroundWaterAvailability)"
+"(Year)-[:HAS_FUTURE_USE]->(FutureUse)"
+"(Year)-[:HAS_ADDITIONAL_RECHARGE]->(AdditionalRecharge)"
+"(Year)-[:HAS_AQUIFER]->(Aquifer)"
 
 IMPORTANT RULES:
 1. NEVER use exists() function - use "property IS NOT NULL" instead
 2. Always convert state and district names to UPPERCASE
 3. Use proper Neo4j 5+ syntax
 4. Return only valid Cypher without code fences or explanations
+5. If asked for recharge_worthy or non_recharge_worthy_area, mention it in the type property of (:Area)
+6. If asked for total area, remember the type is "total"
+7. If have to use BlockSummary node, simply return the value of what is asked
+8. If no year is mentioned, use ONLY 2024 as the year value on the Year node
+9. The unit of rainfall is "mm", unit of area is "ha" and units for other ground water data is "ham" 
 """
 
 # ---------- Few-shot Examples for Better Cypher Generation ----------
 FEW_SHOT_EXAMPLES = """
 Example 1:
 Question: "What is the rainfall in Kerala?"
-Cypher: MATCH (s:State {name: "KERALA"})-[:HAS_RAINFALL]->(r:Rainfall) RETURN s.name, r.total
+Cypher: MATCH (c:Country {name:"India"})-[:HAS_STATE]->(s:State {name:"KERALA"})-[:HAS_YEAR]->(y:Year {year:2024})-[:HAS_RAINFALL]->(r:Rainfall)
+RETURN r.total AS rainfall
+
 
 Example 2:
 Question: "Show districts in Kerala with critical groundwater status"
@@ -411,11 +416,15 @@ Cypher: MATCH (s:State {name: "KERALA"})-[:HAS_District]->(d:District)-[:HAS_CAT
 
 Example 3:
 Question: "Rainfall data for Kottayam district in 2023"
-Cypher: MATCH (d:District {name: "KOTTAYAM"})-[:HAS_RAINFALL]->(r:Rainfall) WHERE r.year = 2023 RETURN d.name, r.total, r.command, r.non_command
+Cypher: MATCH (c:Country {name:"India"})-[:HAS_STATE]->(:State {name:"KERALA"})-[:HAS_DISTRICT]->(d:District {name:"KOTTAYAM"})-[:HAS_YEAR]->(y:Year {year:2023})-[:HAS_RAINFALL]->(r:Rainfall)
+RETURN d.name AS District, y.year AS Year, r.total AS Rainfall
 
 Example 4:
 Question: "Compare groundwater draft between Kerala and Tamil Nadu"
-Cypher: MATCH (s:State)-[:HAS_DRAFT]->(d:Draft) WHERE s.name IN ["KERALA", "TAMIL NADU"] RETURN s.name, d.total, d.agriculture, d.domestic, d.industry
+Cypher: MATCH (c:Country {name:"India"})-[:HAS_STATE]->(s:State)-[:HAS_YEAR]->(y:Year)-[:HAS_DRAFT]->(d:Draft) WHERE s.name IN ["KERALA", "TAMIL NADU"]
+RETURN s.name AS State, y.year AS Year, d.total AS Draft
+ORDER BY y.year, State
+
 """
 
 # ---------- Cypher Sanitization Functions ----------
@@ -488,6 +497,11 @@ def query_to_cypher(user_query: str) -> str:
     3. Return ONLY the Cypher query, no explanations or code fences
     4. Use Neo4j 5+ compatible syntax only
     5. Always include a RETURN statement
+    6. If asked for recharge_worthy or non_recharge_worthy_area, mention it in the type property of (:Area)
+    7. If asked for total area, remember the type is "total"
+    8. If have to use BlockSummary node, simply return the value of what is asked
+    9. If no year is mentioned, use ONLY 2024 as the year value on the Year node
+    10. The unit of rainfall is "mm", unit of area is "ha" and units for other ground water data is "ham" 
 
     Question: "{user_query}"
 
