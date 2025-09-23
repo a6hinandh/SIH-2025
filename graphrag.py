@@ -264,6 +264,8 @@
 
 
 
+
+
 """
 graphrag.py -- Enhanced GraphRAG: Pinecone (semantic) + Neo4j (graph) + Gemini (LLM)
 Updated with improvements from SIH 2025 document:
@@ -812,3 +814,5 @@ if __name__ == "__main__":
             print("🔌 Neo4j connection closed")
         except:
             pass
+
+

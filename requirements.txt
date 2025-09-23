@@ -1,6 +1,6 @@
 # Core ML and Vector Processing
 sentence-transformers>=2.2.0
-pinecone-client>=3.0.0
+pinecone>=7.0.0
 
 # Data Processing and Analysis
 pandas>=1.5.0
