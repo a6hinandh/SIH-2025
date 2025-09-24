@@ -836,9 +836,13 @@ from neo4j import GraphDatabase
 from pinecone import Pinecone
 from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
+from langdetect import detect
+from googletrans import Translator
 import traceback
 
 load_dotenv()
+
+translator = Translator()
 
 # ---------- CONFIG ----------
 NEO4J_URI = os.getenv("NEO4J_URI")
@@ -1043,7 +1047,7 @@ def interpret_value(value: float, metric_type: str) -> str:
 FEW_SHOT_EXAMPLES = """
 Example 1:
 Question: "What is the rainfall in Kerala?"
-Cypher: MATCH (c:Country {name:"India"})-[:HAS_STATE]->(s:State {name:"KERALA"})-[:HAS_YEAR]->(y:Year {year:2024})-[:HAS_RAINFALL]->(r:Rainfall)
+Cypher: MATCH (c:Country {name:"INDIA"})-[:HAS_STATE]->(s:State {name:"KERALA"})-[:HAS_YEAR]->(y:Year {year:2024})-[:HAS_RAINFALL]->(r:Rainfall)
 RETURN r.total AS rainfall
 
 Example 2:
@@ -1052,12 +1056,12 @@ Cypher: MATCH (s:State {name: "KERALA"})-[:HAS_District]->(d:District)-[:HAS_CAT
 
 Example 3:
 Question: "Rainfall data for Kottayam district in 2023"
-Cypher: MATCH (c:Country {name:"India"})-[:HAS_STATE]->(:State {name:"KERALA"})-[:HAS_DISTRICT]->(d:District {name:"KOTTAYAM"})-[:HAS_YEAR]->(y:Year {year:2023})-[:HAS_RAINFALL]->(r:Rainfall)
+Cypher: MATCH (c:Country {name:"INDIA"})-[:HAS_STATE]->(:State {name:"KERALA"})-[:HAS_DISTRICT]->(d:District {name:"KOTTAYAM"})-[:HAS_YEAR]->(y:Year {year:2023})-[:HAS_RAINFALL]->(r:Rainfall)
 RETURN d.name AS District, y.year AS Year, r.total AS Rainfall
 
 Example 4:
 Question: "Compare groundwater draft between Kerala and Tamil Nadu"
-Cypher: MATCH (c:Country {name:"India"})-[:HAS_STATE]->(s:State)-[:HAS_YEAR]->(y:Year)-[:HAS_DRAFT]->(d:Draft) WHERE s.name IN ["KERALA", "TAMIL NADU"]
+Cypher: MATCH (c:Country {name:"INDIA"})-[:HAS_STATE]->(s:State)-[:HAS_YEAR]->(y:Year)-[:HAS_DRAFT]->(d:Draft) WHERE s.name IN ["KERALA", "TAMIL NADU"]
 RETURN s.name AS State, y.year AS Year, d.total AS Draft
 ORDER BY y.year, State
 """
@@ -1128,7 +1132,7 @@ def query_to_cypher(user_query: str) -> str:
 
     STRICT RULES:
     1. NEVER use exists() - use "property IS NOT NULL" instead
-    2. ALWAYS convert state/district names to UPPERCASE in quotes
+    2. ALWAYS convert country/state/district names to UPPERCASE in quotes
     3. Return ONLY the Cypher query, no explanations or code fences
     4. Use Neo4j 5+ compatible syntax only
     5. Always include a RETURN statement
@@ -1280,13 +1284,14 @@ def generate_graphrag_response(semantic_results: List[Dict], graph_results: List
     {interpretation_context if interpretation_context else "No numerical context available"}
 
     KNOWLEDGE GRAPH DATA:
-    {json.dumps(graph_results, indent=2) if graph_results else "No graph results available"}
+    {graph_results if graph_results else "No graph results available"}
 
     SEMANTIC SEARCH DATA:
-    {json.dumps(semantic_results, indent=2) if semantic_results else "No semantic results available"}
+    {semantic_results if semantic_results else "No semantic results available"}
 
     REQUIREMENTS:
     - Answer directly and include retrieved values with correct units (mm for rainfall, ha for area, ham for groundwater data)
+    - First refer the KONOWLEDGE GRAPH DATA, and generate the response. If no graph data is available, refer to SEMANTIC SEARCH DATA
     - Add interpretation: Is the value high, low, normal, critical, etc.?
     - Tailor explanation specifically to the {role.upper()} role guidelines
     - Keep response concise but informative (2-4 sentences)
@@ -1347,6 +1352,11 @@ def graphrag_chatbot(user_query: str, role: str = "general", debug_mode: bool = 
     Enhanced GraphRAG function with role-aware insights and interpretive responses
     """
     start_time = time.time()
+
+    lang_code = detect(user_query)
+    if lang_code!="en":
+        result = translator.translate(user_query, src=lang_code, dest="en")
+        user_query = result.text
     
     # Handle direct Cypher input for debugging
     if user_query.lower().startswith("cypher:"):
@@ -1389,6 +1399,9 @@ def graphrag_chatbot(user_query: str, role: str = "general", debug_mode: bool = 
     
     # Apply simple UI formatting
     final_response = format_response_for_role(final_response, role)
+
+    if lang_code!="en":
+        final_result = translator.translate(final_response, src="en", dest=lang_code)
     
     processing_time = round(time.time() - start_time, 2)
     
@@ -1397,7 +1410,7 @@ def graphrag_chatbot(user_query: str, role: str = "general", debug_mode: bool = 
         "cypher_used": cypher,
         "semantic_results": semantic_results,
         "graph_results": graph_results,
-        "final_answer": final_response,
+        "final_answer": final_result.text if lang_code!="en" else final_response,
         "error": error_info,
         "processing_time": processing_time,
         "role": role,
