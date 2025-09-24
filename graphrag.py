@@ -1292,6 +1292,7 @@ def generate_graphrag_response(semantic_results: List[Dict], graph_results: List
     REQUIREMENTS:
     - Answer directly and include retrieved values with correct units (mm for rainfall, ha for area, ham for groundwater data)
     - First refer the KONOWLEDGE GRAPH DATA, and generate the response. If no graph data is available, refer to SEMANTIC SEARCH DATA
+    - If the query is not related to ground water data, state that you were sorry that, you coudnt answer the query as it is not related to ground water data
     - Add interpretation: Is the value high, low, normal, critical, etc.?
     - Tailor explanation specifically to the {role.upper()} role guidelines
     - Keep response concise but informative (2-4 sentences)
@@ -1354,7 +1355,7 @@ def graphrag_chatbot(user_query: str, role: str = "general", debug_mode: bool = 
     start_time = time.time()
 
     lang_code = detect(user_query)
-    if lang_code!="en":
+    if lang_code in ["hi","ml","ta","te","kn"]:
         result = translator.translate(user_query, src=lang_code, dest="en")
         user_query = result.text
     
@@ -1400,7 +1401,7 @@ def graphrag_chatbot(user_query: str, role: str = "general", debug_mode: bool = 
     # Apply simple UI formatting
     final_response = format_response_for_role(final_response, role)
 
-    if lang_code!="en":
+    if lang_code in ["hi","ml","ta","te","kn"]:
         final_result = translator.translate(final_response, src="en", dest=lang_code)
     
     processing_time = round(time.time() - start_time, 2)
@@ -1410,7 +1411,7 @@ def graphrag_chatbot(user_query: str, role: str = "general", debug_mode: bool = 
         "cypher_used": cypher,
         "semantic_results": semantic_results,
         "graph_results": graph_results,
-        "final_answer": final_result.text if lang_code!="en" else final_response,
+        "final_answer": final_result.text if lang_code in ["hi","ml","ta","te","kn"]  else final_response,
         "error": error_info,
         "processing_time": processing_time,
         "role": role,
